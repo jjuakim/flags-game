@@ -1,0 +1,347 @@
+// system includes
+#include <cstring>
+
+// Qt includes
+#include <qtextview.h>
+#include <qpushbutton.h>
+#include <qsocket.h>
+#include <qspinbox.h>
+#include <qtextstream.h>
+#include <qpainter.h>
+
+// local includes
+#include "servermainwindow.h"
+#include "serversocket.h"
+
+#define SIZE_MUL  4
+#define IMAGEWIDTH 64*SIZE_MUL //GETWIDTHBYTE(24, 320)//320
+#define IMAGEHEIGHT 48*SIZE_MUL
+
+//#define IMAGEWIDTH  192
+//#define IMAGEHEIGHT 144
+#define DEPTH 4
+
+////////////////////////////////////////////////////////////////////////////////
+
+ServerMainWindow::ServerMainWindow(QWidget* parent, const char* name)
+  : MainWindowBase(parent, name),
+  m_server(0)
+{
+  QObject::connect(m_start, SIGNAL(clicked()), this, SLOT(slotStartClicked()));
+  QObject::connect(m_stop, SIGNAL(clicked()), this, SLOT(slotStopClicked()));
+  recv_flag = 0;
+  recv_total_len = 0;
+  recv_len = 0;
+  m_flag_err = 0;
+
+  m_databuffer.resize( IMAGEWIDTH*IMAGEHEIGHT*2 );
+  
+  unsigned char *dst;
+  unsigned char *mydst;
+  
+  _image.create(IMAGEWIDTH, IMAGEHEIGHT, DEPTH*8);
+  _myImage.create(IMAGEWIDTH, IMAGEHEIGHT, DEPTH*8);
+ 
+  dst = _image.bits();
+  mydst = _myImage.bits();
+
+  for (int i = 0 ; i < IMAGEHEIGHT ; i++) {
+	  for(int j = 0 ; j < IMAGEWIDTH ; j++) {
+		  dst[i*IMAGEWIDTH*DEPTH + j*DEPTH] = 0;
+		  dst[i*IMAGEWIDTH*DEPTH + j*DEPTH+1] = 0;
+		  dst[i*IMAGEWIDTH*DEPTH + j*DEPTH+2] = 0;
+		  mydst[i*IMAGEWIDTH*DEPTH + j*DEPTH] = 0;
+          mydst[i*IMAGEWIDTH*DEPTH + j*DEPTH+1] = 0;
+          mydst[i*IMAGEWIDTH*DEPTH + j*DEPTH+2] = 0;
+	  }
+  }
+}
+
+////////////////////////////////////////////////////////////////////////////////
+
+ServerMainWindow::~ServerMainWindow()
+{
+  slotStopClicked();
+}
+
+////////////////////////////////////////////////////////////////////////////////
+
+void ServerMainWindow::sendToClients(const QString& text)
+{
+  if (text.isNull()) return;
+
+  // iterate over all clients and send them the text
+    QSocket* sock = m_server->socket();
+    QTextStream stream(sock);
+    stream << text;
+}
+
+/////////////////////////////////////////////////////////////////////////////////
+
+void ServerMainWindow::slotStartClicked()
+{
+  if (m_server != 0) return; // sanity check
+
+  m_server = new ServerSocket(m_port->value(), this);
+  if (!m_server->ok())
+  {
+    delete m_server;
+    m_server = 0;
+    return;
+  }
+
+  QObject::connect(m_server, SIGNAL(newClient(QSocket*)), this, SLOT(slotNewClient(QSocket*)));
+  m_start->setEnabled(false);
+  m_stop->setEnabled(true);
+}
+
+////////////////////////////////////////////////////////////////////////////////
+
+void ServerMainWindow::slotStopClicked()
+{
+  m_start->setEnabled(true);
+  m_stop->setEnabled(false);
+
+  // disconnect the socket's signals from any slots or signals
+  m_server->socket()->disconnect();
+
+  delete m_server;
+  m_server = 0;
+}
+
+////////////////////////////////////////////////////////////////////////////////
+
+void ServerMainWindow::slotNewClient(QSocket* socket)
+{
+  qDebug("client connected");
+  
+  // notify all others about the newcomer
+  sendToClients(QString("Server: Client connected\n"));
+
+  QObject::connect(socket, SIGNAL(connectionClosed()), this, SLOT(slotClientDisconnected()));
+  QObject::connect(socket, SIGNAL(readyRead()), this, SLOT(slotSocketRead()));
+
+  // great the newcomer
+  QTextStream stream(socket);
+  stream << "Server: Hi\nYou are client " << endl;
+}
+
+////////////////////////////////////////////////////////////////////////////////
+
+void ServerMainWindow::slotClientDisconnected()
+{
+  QObject* sender = const_cast<QObject*>(QObject::sender());
+  QSocket* socket = static_cast<QSocket*>(sender);
+
+  qDebug("client disconnected");
+
+  //disconnect signals
+  socket->disconnect();
+
+  // remove from dict
+  sendToClients(QString("Server: Client  disconnected\n"));
+
+}
+
+////////////////////////////////////////////////////////////////////////////////
+
+void ServerMainWindow::slotSocketRead()
+{
+  QObject* sender = const_cast<QObject*>(QObject::sender());
+  QSocket* socket = static_cast<QSocket*>(sender);
+
+  int over_flag = 0;
+ 
+
+  //에러 복구 루틴 
+  if(m_flag_err) {
+	unsigned char temp_buffer[40000];
+	while(1) {
+    	int read_len = socket->bytesAvailable();
+		if(!read_len)
+			return;
+ 		if(socket->canReadLine()){
+			QString temp_str; 
+			int idx;
+			temp_str = socket->readLine(); 
+			if( (idx = temp_str.find("HU") == -1) )
+				continue;
+			temp_str.remove(idx,0);
+			printf(" ## Error Recovery - header read length %d\r\n",temp_str.length());
+			if(temp_str.left(2) == "HU"){
+				temp_str.remove(0,2);
+				bool ok;
+				int data_len = temp_str.toInt( &ok, 10 );     
+				printf("## Error Recovery - data length : %d\r\n",data_len);
+				if(data_len){ 
+					recv_total_len = data_len;
+					recv_len = 0;
+					recv_flag = 1;
+					m_flag_err = 0;
+					return;
+				}
+			}
+
+		}
+		//cracked data 
+		else {
+			if(read_len > 40000)
+				read_len = 40000;
+			int rtn = socket->readBlock( (char*)temp_buffer, read_len );
+		}
+	}
+  }
+
+
+  // 정상 data reading 루틴
+  if(recv_flag) {
+	//printf(".");
+
+	int read_len = socket->bytesAvailable();
+
+	// socket buffer over - 잔여 데이터 처리 필요
+	if((recv_total_len - recv_len) < read_len){
+		printf("over %d \r\n", read_len - (recv_total_len - recv_len));
+		read_len = recv_total_len - recv_len;
+		over_flag = 1;
+	}
+
+	int rtn = socket->readBlock( m_databuffer.data()+recv_len, read_len );
+	recv_len += rtn;
+	//정상 데이터 reading  -  Image Refresh
+	if(recv_len == recv_total_len){
+		//printf("Data recv complete\r\n");
+
+		QString str;
+		str.setNum( recv_total_len );     
+		m_edit->append(str);
+		//m_edit->append(str);
+		
+		setImage();
+		
+		recv_total_len = 0;
+		recv_len  = 0;
+		recv_flag = 0;
+	}
+	// 데이터 over 리딩 - ERROR 
+	else if( recv_len > recv_total_len) {
+		printf(" !!! ERROR - data over %d reading \r\n",recv_len - recv_total_len);
+		recv_total_len = 0;
+		recv_len  = 0;
+		recv_flag = 0;
+		m_flag_err = 1;
+	}
+    
+	//나머지 데이터 처리 루틴
+	if(over_flag){
+		while(read_len = socket->bytesAvailable()) {
+			printf("%d byte left\r\n", read_len);
+			slotSocketRead();
+		}
+	}
+  }
+
+  // 정상 data header reading 루틴
+  else {
+	//printf(";");
+	if (socket->canReadLine()){
+		QString line = socket->readLine(); // read the line of text
+		//printf("header read length %d\r\n",line.length());
+		if(line.left(2) == "HU"){
+			line.remove(0,2);
+			bool ok;
+			int data_len = line.toInt( &ok, 10 );     
+			//printf("data length : %d\r\n",data_len);
+			if(data_len){ 
+				recv_total_len = data_len;
+				recv_len = 0;
+				recv_flag = 1;
+			}
+		}
+		else {
+			printf("read header error\r\n");
+			m_flag_err = 1;
+		}
+	}
+	else {
+		printf("read header error\r\n");
+		m_flag_err = 1;
+	}
+
+    // and send it to everone including the sender
+    //sendToClients(QString("Client %0: %1").arg(client->number()).arg(line));
+
+    //client->item()->setText(2, line.left(line.length()-1));
+    //m_list->update();
+  }
+ 
+}
+
+
+void ServerMainWindow::paintEvent(QPaintEvent* e)
+{
+	//static QPixmap pixmap;
+	QRect rect = e->rect();
+	if(!_image.isNull() && !_myImage.isNull()){
+		QPainter p(this);
+		p.translate(-rect.x(), -rect.y());
+		p.setClipRegion(e->region());
+		p.drawImage(15, 195, _image);
+		p.drawImage(315, 195, _myImage);
+		p.end();
+	}
+}
+
+// end of file
+
+void ServerMainWindow::setImage()
+{
+  unsigned char *dst;
+  unsigned char *mydst;
+  unsigned char *src;
+  src =(unsigned char*)m_databuffer.data();
+  dst = _image.bits();
+  mydst = _myImage.bits();
+  
+  //흑백 변환
+  for (int i = 0 ; i < IMAGEHEIGHT ; i++) {
+  	for (int j = 0 ; j < IMAGEWIDTH ; j++) {
+		int index = i*IMAGEWIDTH*DEPTH + j*DEPTH;
+		int mid = (dst[index] + dst[index+1] + dst[index+2]) / 3; 
+		//qDebug("mid : %d \r\n", mid);
+		mydst[index] = mid;
+		mydst[index+1] = mid; 
+		mydst[index+2] = mid; 
+	}
+  }
+
+
+
+  int index;
+  for(int i = 0 ; i < IMAGEHEIGHT ; i++){
+	  for(int j = 0 ; j < IMAGEWIDTH ; j++) {
+		  index = i*IMAGEWIDTH*DEPTH + j*DEPTH;
+		  GetRGB24fromRGB565(&dst[index+2] , &dst[index+1], &dst[index],
+							 src[i*IMAGEWIDTH*2 + j*2+1], src[i*IMAGEWIDTH*2 + j*2]);
+		  
+		//  GetRGB24fromRGB565(&mydst[index+2] , &mydst[index+1], &mydst[index],
+		//					 src[i*IMAGEWIDTH*2 + j*2+1], src[i*IMAGEWIDTH*2 + j*2]);
+	  }
+  }
+
+  repaint(false);
+
+}
+
+void ServerMainWindow::GetRGB24fromRGB565(unsigned char *r, unsigned char *g, unsigned char *b, unsigned char upper, unsigned char lower)
+{
+	unsigned short red, green, blue;
+
+	red = upper>>3;
+	green = ((upper&0x07)<<3) | ((lower>>5)&0x07);
+	blue = lower&0x1f;
+
+	*r = ((unsigned int)red*8);
+	*g = ((unsigned int)green*4);
+	*b = ((unsigned int)blue*8);
+}
