@@ -9,6 +9,8 @@
 #include <qtextstream.h>
 #include <qpainter.h>
 #include <qcstring.h>
+#include <qlabel.h>
+#include <qpainter.h>
 // local includes
 #include "servermainwindow.h"
 #include "serversocket.h"
@@ -29,10 +31,13 @@ ServerMainWindow::ServerMainWindow(QWidget* parent, const char* name)
 {
   QObject::connect(m_start, SIGNAL(clicked()), this, SLOT(slotStartClicked()));
   QObject::connect(m_stop, SIGNAL(clicked()), this, SLOT(slotStopClicked()));
-  recv_flag = 0;
+  QObject::connect(m_btnGame, SIGNAL(clicked()), this, SLOT(slotGameClicked()));
+    recv_flag = 0;
   recv_total_len = 0;
   recv_len = 0;
   m_flag_err = 0;
+  timeCount = 0;
+  isGameStart = false;
 
   m_databuffer.resize( IMAGEWIDTH*IMAGEHEIGHT*2 );
   
@@ -57,6 +62,15 @@ ServerMainWindow::ServerMainWindow(QWidget* parent, const char* name)
   _myImage = _image.copy();
   _oldImage = _image.copy();
  // _difImage = _image.copy();
+  m_edit->setText("Please Connect a Clinet!");
+  m_btnGame->setEnabled(false);
+
+  img_main.load("main.bmp");
+  img_ori.load("0.bmp");
+  img_lt.load("lt.bmp");
+  img_lb.load("lb.bmp");
+  img_rt.load("rt.bmp");
+  img_rb.load("rb.bmp");
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -107,8 +121,8 @@ void ServerMainWindow::slotStartClicked()
   m_start->setEnabled(false);
   m_stop->setEnabled(true);
 
+  m_gameStatus->setText("Please Connect a Client!!");
 }
-
 
 ////////////////////////////////////////////////////////////////////////////////
 
@@ -118,10 +132,14 @@ void ServerMainWindow::slotStopClicked()
   m_start->setEnabled(true);
   m_stop->setEnabled(false);
  
+  timeCount = 0;
+  m_btnGame->setEnabled(false);
+  m_gameStatus->setText("Game Status");
+
   qDebug("0:delete timer");
   if(timer != 0) {
      delete timer;
-    timer = 0; 
+     timer = 0; 
   }
   
   // disconnect the socket's signals from any slots or signals
@@ -140,13 +158,13 @@ void ServerMainWindow::slotNewClient(QSocket* socket)
 {
   qDebug("client connected");
   
+  m_btnGame->setEnabled(true);
+  QPainter p(this);
+  p.drawPixmap(QRect(315, 195, 256, 192), img_main);
+  p.end();
+
   // notify all others about the newcomer
   sendToClients(QString("Server: Client connected\n"));
-
-  if(timer != 0) {
-    qDebug("Timer is startted");
-    timer->start(3000);
-  }
 
   QObject::connect(socket, SIGNAL(connectionClosed()), this, SLOT(slotClientDisconnected()));
   QObject::connect(socket, SIGNAL(readyRead()), this, SLOT(slotSocketRead()));
@@ -161,8 +179,8 @@ void ServerMainWindow::slotNewClient(QSocket* socket)
 
 void ServerMainWindow::slotTimeDone()
 {
-// int diffSum = 0;
-//int midSum = 0;
+
+  // 이미지 계산부분 
   unsigned char *oldDst;
   unsigned char *newDst;
  
@@ -184,62 +202,39 @@ void ServerMainWindow::slotTimeDone()
 
   //구역별차이구하기 여기할차례
  int sectSum[9] = {0,0,0,0,0,0,0,0,0};
- int sectSum2[9] = {0,0,0,0,0,0,0,0,0};
  int oldSum[9] = {0,0,0,0,0,0,0,0,0};
  int newSum[9] = {0,0,0,0,0,0,0,0,0};
-  /*
-  sectSum[0] = abs(sumDiffVal(newDst, 0, 0) - sumDiffVal(oldDst, 0, 0));
-  sectSum[1] = abs(sumDiffVal(newDst, 64, 0) - sumDiffVal(oldDst, 64, 0));
-  sectSum[2] = abs(sumDiffVal(newDst, 128, 0) - sumDiffVal(oldDst, 128, 0));
-  sectSum[3] = abs(sumDiffVal(newDst, 0, 48) - sumDiffVal(oldDst, 0, 48));
-  sectSum[4] = abs(sumDiffVal(newDst, 64, 48) - sumDiffVal(oldDst, 64, 48));
-  sectSum[5] = abs(sumDiffVal(newDst, 128, 48) - sumDiffVal(oldDst, 128, 48));
-  sectSum[6] = abs(sumDiffVal(newDst, 0, 96) - sumDiffVal(oldDst, 0, 96));
-  sectSum[7] = abs(sumDiffVal(newDst, 64, 96) - sumDiffVal(oldDst, 64, 96));
-  sectSum[8] = abs(sumDiffVal(newDst, 128, 96) - sumDiffVal(oldDst, 128, 96));
-
- 
- sectSum[0] = 0;
- */
   
   for (int i = 0; i < IMAGEHEIGHT; i++) {
     for (int j = 0; j < IMAGEWIDTH; j++) {
        int index = i*IMAGEWIDTH*DEPTH + j*DEPTH;
-       if (j < 64 && i < 48){
+       if (j < 85 && i < 64){
          oldSum[0] += oldDst[index]; newSum[0] += newDst[index];
-         sectSum[0] += abs(newDst[index] - oldDst[index]);
        }
-       else if (64 <= j && j < 128 && i < 48) {
+       else if (85 <= j && j < 170 && i < 64) {
          oldSum[1] += oldDst[index]; newSum[1] += newDst[index];
-         sectSum[1] += abs(newDst[index] - oldDst[index]);
        }
-       else if (128 <= j && i < 48) {
+       else if (170 <= j && i < 64) {
          oldSum[2] += oldDst[index]; newSum[2] += newDst[index];
-         sectSum[2] += abs(newDst[index] - oldDst[index]);
        }
-       else if (j < 64 && 48 <= i && i < 96) {
+       else if (j < 85 && 64 <= i && i < 128) {
          oldSum[3] += oldDst[index]; newSum[3] += newDst[index];
-         sectSum[3] += abs(newDst[index] - oldDst[index]);
        }
-       else if (64 <= j && j < 128 && 48 <= i && i < 96) {
+       else if (85<= j && j < 170 && 64 <= i && i < 128) {
          oldSum[4] += oldDst[index]; newSum[4] += newDst[index];
-         sectSum[4] += abs(newDst[index] - oldDst[index]);
+ 
        }
-       else if (128 <= j && 48 <= i && i < 96) {
+       else if (170 <= j && 64 <= i && i < 128) {
          oldSum[5] += oldDst[index]; newSum[5] += newDst[index];
-         sectSum[5] += abs(newDst[index] - oldDst[index]);
        }
-       else if (j < 64 && 96 <= i) {
+       else if (j < 85 && 128 <= i) {
          oldSum[6] += oldDst[index]; newSum[6] += newDst[index];
-         sectSum[6] += abs(newDst[index] - oldDst[index]);
        }
-       else if (64 <= j && j < 128 && 96 <= i) {
+       else if (85 <= j && j < 170 && 128 <= i) {
          oldSum[7] += oldDst[index]; newSum[7] += newDst[index];
-         sectSum[7] += abs(newDst[index] - oldDst[index]);
        }
-       else if (128 <= j && 96 <= i) {
+       else if (170 <= j && 128 <= i) {
          oldSum[8] += oldDst[index]; newSum[8] += newDst[index];
-         sectSum[8] += abs(newDst[index] - oldDst[index]);
        }
     }
   }
@@ -247,40 +242,77 @@ void ServerMainWindow::slotTimeDone()
   for (int i = 0; i < 3; i++) {
     for (int j = 0; j < 3; j++) {
       int x = i * 3 + j;
-      sectSum2[x] = abs(newSum[x] - oldSum[x]);
+      sectSum[x] = abs(newSum[x] - oldSum[x]);
+      if(sectSum[x] >70000) 
+        sectSum[x] = 0;
     }
   }
- m_edit->append("=====================================");
-    m_edit->append(QString("[0] : %0, [1] : %1, [2] : %2").arg(sectSum2[0]).arg(sectSum2[1]).arg(sectSum2[2]));
-    m_edit->append(QString("[3] : %3, [4] : %4, [5] : %5").arg(sectSum2[3]).arg(sectSum2[4]).arg(sectSum2[5]));
-    m_edit->append(QString("[6] : %6, [7] : %7, [8] : %8").arg(sectSum2[6]).arg(sectSum2[7]).arg(sectSum2[8]));
-/*
-  m_edit->append("-------------------------------------=");
-    m_edit->append(QString("[0] : %0, [1] : %1, [2] : %2").arg(sectSum[0]).arg(sectSum[1]).arg(sectSum[2]));
-    m_edit->append(QString("[3] : %3, [4] : %4, [5] : %5").arg(sectSum[3]).arg(sectSum[4]).arg(sectSum[5]));
-    m_edit->append(QString("[6] : %6, [7] : %7, [8] : %8").arg(sectSum[6]).arg(sectSum[7]).arg(sectSum[8]));
-//  m_edit->append("diff val : " + QString::number(diffSum) + "mid val : " + QString::number(midSum)); 
-  */  
+
   _oldImage = _myImage.copy();
-}
-///////////////////////////////////////////
 
-int ServerMainWindow::sumDiffVal(unsigned char *dst, int startX, int startY)
-{
-  int width = 64;
-  int height = 48;
-  int sum = 0;
+  //게임 부분
+  QRect rect(315, 195, IMAGEWIDTH, IMAGEHEIGHT);
+  QPainter p(this);
 
-  for (int y = 0; y < height; y++) {
-    for (int x = 0; x < width; x++) {
-      int index = y*width*DEPTH + x*DEPTH;
-      sum += dst[index];
-    }
+  if(timeCount != 0) {
+    m_gameStatus->setText(QString::number(timeCount));
+    timeCount--;
   }
-  return sum;
+  else
+  {
+    m_gameStatus->setText("Start!!!!");       
+    isGameStart = true;
+    p.drawPixmap(rect, img_ori);
+  }
+
+  if(isGameStart) {
+    //점수 매기는 부분
+    if(sectSum[0] == 0 && sectSum[3] == 0)
+    {
+      //left top
+      m_edit->append("left top ");
+      p.drawPixmap(rect, img_lt);
+    }
+    else if(sectSum[3] == 0 && sectSum[6] == 0)
+    {
+     //left down
+     m_edit->append("left down");
+      p.drawPixmap(rect, img_lb);
+    }
+    else if(sectSum[2] ==0 && sectSum[5] == 0)
+    {
+      //right top
+      m_edit->append("right top");
+      p.drawPixmap(rect, img_rt);
+    }
+    else if (sectSum[5] == 0 && sectSum[8] == 0)
+    {
+      //right bottom
+      m_edit->append("right botton");
+      p.drawPixmap(rect, img_rb);
+    } 
+  }
+  p.end();
 }
 ////////////////////////////////////////////////////////////////////////////////
 
+void ServerMainWindow::slotGameClicked()
+{
+  qDebug("Button Clicked");
+  m_btnGame->setEnabled(false);
+  
+  timeCount = 10;
+  isGameStart = false;
+  m_gameStatus->setText("READY.....!!!!!!");
+  
+  if(timer != 0) {
+    qDebug("Timer is startted");
+    timer->start(1000);
+  }
+
+}
+
+////////////////////////////////////////////////////////////////////////////////
 void ServerMainWindow::slotClientDisconnected()
 {
   QObject* sender = const_cast<QObject*>(QObject::sender());
@@ -298,6 +330,8 @@ void ServerMainWindow::slotClientDisconnected()
   // remove from dict
   sendToClients(QString("Server: Client  disconnected\n"));
 
+  isGameStart = false;
+  m_gameStatus->setText("Clinet is disconnected");
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -443,9 +477,17 @@ void ServerMainWindow::paintEvent(QPaintEvent* e)
     p.translate(-rect.x(), -rect.y());
     p.setClipRegion(e->region());
     p.drawImage(15, 195, _image);
-    p.drawImage(315, 195, _oldImage);
     p.end();
   }
+
+  QPainter p(this);
+  QBrush brush(white, SolidPattern);
+  p.setBrush(brush);
+  p.drawLine(100,190, 100, 400);
+  p.drawLine(185,190, 185, 400);
+  p.drawLine(10,259, 300, 259);
+  p.drawLine(10,323, 300, 323);
+  p.end();
 }
 
 // end of file

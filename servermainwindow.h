@@ -5,6 +5,8 @@
 #include <qptrdict.h>
 #include <qimage.h>
 #include <qtimer.h>
+#include <qpixmap.h>
+#include <qrect.h>
 
 // local includes
 #include "servermainwindowbase.h"
@@ -19,7 +21,6 @@ class ServerMainWindow : public MainWindowBase
   Q_OBJECT
 
 public:
-  int sumDiffVal(unsigned char*, int, int);
   void GetRGB24fromRGB565(unsigned char* r, unsigned char* g, unsigned char *b, unsigned char upper, unsigned char lower);
   void setImage();
   ServerMainWindow(QWidget* parent=0, const char* name=0);
@@ -37,10 +38,13 @@ public:
   int bytesToInt(const char *buffer, int size);
   void intToBytes(int value, char *buffer, int size);
 
+  int timeCount;
+  bool isGameStart;
 
 private:
   QTimer *timer; 
- 
+  QPixmap img_main, img_ori, img_lt, img_lb, img_rt, img_rb;
+  
 protected:
   ServerSocket* m_server;
 
@@ -51,7 +55,8 @@ protected:
 protected slots:
   void slotStartClicked();
   void slotStopClicked();
-
+  void slotGameClicked();
+  
   void slotNewClient(QSocket* socket);
   void slotClientDisconnected();
 

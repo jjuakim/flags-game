@@ -108,8 +108,40 @@
                 <x>10</x>
                 <y>50</y>
                 <width>570</width>
-                <height>140</height>
+                <height>100</height>
             </rect>
+        </property>
+    </widget>
+    <widget class="QPushButton">
+        <property name="name">
+            <cstring>m_btnGame</cstring>
+        </property>
+        <property name="geometry">
+            <rect>
+                <x>10</x>
+                <y>160</y>
+                <width>100</width>
+                <height>31</height>
+            </rect>
+        </property>
+        <property name="text">
+            <string>GameStart</string>
+        </property>
+    </widget>
+    <widget class="QLabel">
+        <property name="name">
+            <cstring>m_gameStatus</cstring>
+        </property>
+        <property name="geometry">
+            <rect>
+                <x>120</x>
+                <y>161</y>
+                <width>460</width>
+                <height>30</height>
+            </rect>
+        </property>
+        <property name="text">
+            <string>Game Status</string>
         </property>
     </widget>
 </widget>
