@@ -1,7 +1,7 @@
 /****************************************************************************
 ** Form interface generated from reading ui file 'servermainwindowbase.ui'
 **
-** Created: 수 12월 4 01:36:20 2013
+** Created: 토 12월 7 15:33:55 2013
 **      by: The User Interface Compiler ($Id: qt/main.cpp   3.3.7   edited Aug 31 2005 $)
 **
 ** WARNING! All changes made in this file will be lost!

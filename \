@@ -1,6 +1,6 @@
 // system includes
 #include <cstring>
-#include <stdlib.h>
+
 // Qt includes
 #include <qtextview.h>
 #include <qpushbutton.h>
@@ -8,7 +8,7 @@
 #include <qspinbox.h>
 #include <qtextstream.h>
 #include <qpainter.h>
-#include <qcstring.h>
+
 // local includes
 #include "servermainwindow.h"
 #include "serversocket.h"
@@ -37,14 +37,14 @@ ServerMainWindow::ServerMainWindow(QWidget* parent, const char* name)
   m_databuffer.resize( IMAGEWIDTH*IMAGEHEIGHT*2 );
   
   unsigned char *dst;
+  unsigned char *mydst;
   
   _image.create(IMAGEWIDTH, IMAGEHEIGHT, DEPTH*8);
- //_myImage.create(IMAGEWIDTH, IMAGEHEIGHT, DEPTH*8);
+  _myImage.create(IMAGEWIDTH, IMAGEHEIGHT, DEPTH*8);
   _oldImage.create(IMAGEWIDTH, IMAGEHEIGHT, DEPTH*8);
-//  _difImage.create(IMAGEWIDTH, IMAGEHEIGHT, DEPTH*8);
-
-  
+ 
   dst = _image.bits();
+  mydst = _myImage.bits();
 
   for (int i = 0 ; i < IMAGEHEIGHT ; i++) {
     for(int j = 0 ; j < IMAGEWIDTH ; j++) {
@@ -56,7 +56,7 @@ ServerMainWindow::ServerMainWindow(QWidget* parent, const char* name)
   }
   _myImage = _image.copy();
   _oldImage = _image.copy();
- // _difImage = _image.copy();
+  //mydst = dst.copy();
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -82,22 +82,15 @@ void ServerMainWindow::sendToClients(const QString& text)
 
 void ServerMainWindow::slotStartClicked()
 {
-  qDebug("slotStartClicked");
   if (m_server != 0) return; // sanity check
   if (timer != 0) return; //  sanity check
   
-  qDebug("timer....?"); 
-  if(!timer) {
-    qDebug("make new Timer");
-    timer = new QTimer(this);
-    QObject::connect(timer, SIGNAL(timeout()), SLOT(slotTimeDone()));
-  }
- 
-  qDebug("New Server");
+  timer = new QTimer(this);
+  QObject::connect(timer, SIGNAL(timeout()), SLOT(slotTimeDone()));
+
   m_server = new ServerSocket(m_port->value(), this);
   if (!m_server->ok())
   {
-    qDebug("server has something wrong!!" );
     delete m_server;
     m_server = 0;
     return;
@@ -114,24 +107,16 @@ void ServerMainWindow::slotStartClicked()
 
 void ServerMainWindow::slotStopClicked()
 {
-  qDebug("slotStopClicked");
   m_start->setEnabled(true);
   m_stop->setEnabled(false);
- 
-  qDebug("0:delete timer");
-  if(timer != 0) {
-     delete timer;
-    timer = 0; 
-  }
-  
+
   // disconnect the socket's signals from any slots or signals
-  if(m_server->socket()) {
-    qDebug("1: disconnect sokcet");
-    m_server->socket()->disconnect();
-  }
-  qDebug("2. delete server");
+  m_server->socket()->disconnect();
+
   delete m_server;
   m_server = 0;
+
+  delete timer;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -143,9 +128,8 @@ void ServerMainWindow::slotNewClient(QSocket* socket)
   // notify all others about the newcomer
   sendToClients(QString("Server: Client connected\n"));
 
-  if(timer != 0) {
-    qDebug("Timer is startted");
-    timer->start(3000);
+  if(timer) {
+    timer->start(1000);
   }
 
   QObject::connect(socket, SIGNAL(connectionClosed()), this, SLOT(slotClientDisconnected()));
@@ -154,131 +138,43 @@ void ServerMainWindow::slotNewClient(QSocket* socket)
   // great the newcomer
   QTextStream stream(socket);
   stream << "Server: Hi\nYou are client " << endl;
-  m_edit->setText("");
 }
 
 ////////////////////////////////////////////////////////////////////////////////
 
 void ServerMainWindow::slotTimeDone()
 {
-// int diffSum = 0;
-//int midSum = 0;
-  unsigned char *oldDst;
-  unsigned char *newDst;
- 
-  oldDst = _oldImage.bits();
+   m_edit->append("1sec"); 
+   int diffSum = 0;
 
-  _myImage = _image.copy(); 
-  newDst = _myImage.bits();
+   //정상 데이터 reading 
+   if(recv_flag && recv_len == recv_total_len) {
+      unsigned char *oldDst;
+      unsigned char *newDst;
 
-  // 새로운 이미지 흑백 변환
-  for (int i = 0; i < IMAGEHEIGHT; i++) {
-    for (int j = 0; j < IMAGEWIDTH; j++) {
-      int index = i*IMAGEWIDTH*DEPTH + j*DEPTH;
-      int mid = (newDst[index] + newDst[index+1] + newDst[index+2]) / 3;           
-      newDst[index] = mid;
-      newDst[index+1] = mid;
-      newDst[index+2] = mid;
-    }   
-  } 
+      oldDst = _oldImage.bits();
+      newDst = _image.copy().bits();
 
-  //구역별차이구하기 여기할차례
- int sectSum[9] = {0,0,0,0,0,0,0,0,0};
- int sectSum2[9] = {0,0,0,0,0,0,0,0,0};
- int oldSum[9] = {0,0,0,0,0,0,0,0,0};
- int newSum[9] = {0,0,0,0,0,0,0,0,0};
-  /*
-  sectSum[0] = abs(sumDiffVal(newDst, 0, 0) - sumDiffVal(oldDst, 0, 0));
-  sectSum[1] = abs(sumDiffVal(newDst, 64, 0) - sumDiffVal(oldDst, 64, 0));
-  sectSum[2] = abs(sumDiffVal(newDst, 128, 0) - sumDiffVal(oldDst, 128, 0));
-  sectSum[3] = abs(sumDiffVal(newDst, 0, 48) - sumDiffVal(oldDst, 0, 48));
-  sectSum[4] = abs(sumDiffVal(newDst, 64, 48) - sumDiffVal(oldDst, 64, 48));
-  sectSum[5] = abs(sumDiffVal(newDst, 128, 48) - sumDiffVal(oldDst, 128, 48));
-  sectSum[6] = abs(sumDiffVal(newDst, 0, 96) - sumDiffVal(oldDst, 0, 96));
-  sectSum[7] = abs(sumDiffVal(newDst, 64, 96) - sumDiffVal(oldDst, 64, 96));
-  sectSum[8] = abs(sumDiffVal(newDst, 128, 96) - sumDiffVal(oldDst, 128, 96));
+      // 새로운 이미지 흑백 변환
+      for (int i = 0 ; i < IMAGEHEIGHT ; i++) {
+        for (int j = 0 ; j < IMAGEWIDTH ; j++) {
+          int index = i*IMAGEWIDTH*DEPTH + j*DEPTH;
+          int mid = (newDst[index] + newDst[index+1] + newDst[index+2]) / 3;           
+          newDst[index] = mid;
+          newDst[index+1] = mid;
+          newDst[index+2] = mid;
 
- 
- sectSum[0] = 0;
- */
-  
-  for (int i = 0; i < IMAGEHEIGHT; i++) {
-    for (int j = 0; j < IMAGEWIDTH; j++) {
-       int index = i*IMAGEWIDTH*DEPTH + j*DEPTH;
-       if (j < 64 && i < 48){
-         oldSum[0] += oldDst[index]; newSum[0] += newDst[index];
-         sectSum[0] += abs(newDst[index] - oldDst[index]);
-       }
-       else if (64 <= j && j < 128 && i < 48) {
-         oldSum[1] += oldDst[index]; newSum[1] += newDst[index];
-         sectSum[1] += abs(newDst[index] - oldDst[index]);
-       }
-       else if (128 <= j && i < 48) {
-         oldSum[2] += oldDst[index]; newSum[2] += newDst[index];
-         sectSum[2] += abs(newDst[index] - oldDst[index]);
-       }
-       else if (j < 64 && 48 <= i && i < 96) {
-         oldSum[3] += oldDst[index]; newSum[3] += newDst[index];
-         sectSum[3] += abs(newDst[index] - oldDst[index]);
-       }
-       else if (64 <= j && j < 128 && 48 <= i && i < 96) {
-         oldSum[4] += oldDst[index]; newSum[4] += newDst[index];
-         sectSum[4] += abs(newDst[index] - oldDst[index]);
-       }
-       else if (128 <= j && 48 <= i && i < 96) {
-         oldSum[5] += oldDst[index]; newSum[5] += newDst[index];
-         sectSum[5] += abs(newDst[index] - oldDst[index]);
-       }
-       else if (j < 64 && 96 <= i) {
-         oldSum[6] += oldDst[index]; newSum[6] += newDst[index];
-         sectSum[6] += abs(newDst[index] - oldDst[index]);
-       }
-       else if (64 <= j && j < 128 && 96 <= i) {
-         oldSum[7] += oldDst[index]; newSum[7] += newDst[index];
-         sectSum[7] += abs(newDst[index] - oldDst[index]);
-       }
-       else if (128 <= j && 96 <= i) {
-         oldSum[8] += oldDst[index]; newSum[8] += newDst[index];
-         sectSum[8] += abs(newDst[index] - oldDst[index]);
-       }
-    }
-  }
- 
-  for (int i = 0; i < 3; i++) {
-    for (int j = 0; j < 3; j++) {
-      int x = i * 3 + j;
-      sectSum2[x] = abs(newSum[x] - oldSum[x]);
-    }
-  }
- m_edit->append("=====================================");
-    m_edit->append(QString("[0] : %0, [1] : %1, [2] : %2").arg(sectSum2[0]).arg(sectSum2[1]).arg(sectSum2[2]));
-    m_edit->append(QString("[3] : %3, [4] : %4, [5] : %5").arg(sectSum2[3]).arg(sectSum2[4]).arg(sectSum2[5]));
-    m_edit->append(QString("[6] : %6, [7] : %7, [8] : %8").arg(sectSum2[6]).arg(sectSum2[7]).arg(sectSum2[8]));
-/*
-  m_edit->append("-------------------------------------=");
-    m_edit->append(QString("[0] : %0, [1] : %1, [2] : %2").arg(sectSum[0]).arg(sectSum[1]).arg(sectSum[2]));
-    m_edit->append(QString("[3] : %3, [4] : %4, [5] : %5").arg(sectSum[3]).arg(sectSum[4]).arg(sectSum[5]));
-    m_edit->append(QString("[6] : %6, [7] : %7, [8] : %8").arg(sectSum[6]).arg(sectSum[7]).arg(sectSum[8]));
-//  m_edit->append("diff val : " + QString::number(diffSum) + "mid val : " + QString::number(midSum)); 
-  */  
-  _oldImage = _myImage.copy();
+          // 차이 구하기
+          int diff = newDst[index] - oldDst[index];
+          diffSum += diff;
+        }   
+      } 
+
+      m_edit->append(QString::setNum(diffSum, 10) + "\n"); 
+      oldDst = newDst;
+   }
 }
-///////////////////////////////////////////
 
-int ServerMainWindow::sumDiffVal(unsigned char *dst, int startX, int startY)
-{
-  int width = 64;
-  int height = 48;
-  int sum = 0;
-
-  for (int y = 0; y < height; y++) {
-    for (int x = 0; x < width; x++) {
-      int index = y*width*DEPTH + x*DEPTH;
-      sum += dst[index];
-    }
-  }
-  return sum;
-}
 ////////////////////////////////////////////////////////////////////////////////
 
 void ServerMainWindow::slotClientDisconnected()
@@ -289,8 +185,9 @@ void ServerMainWindow::slotClientDisconnected()
   qDebug("client disconnected");
 
   //stop time 
-  qDebug("timer is stopped");
-  timer->stop();
+  if(timer) {
+    timer->stop();
+  }
 
   //disconnect signals
   socket->disconnect();
@@ -438,12 +335,12 @@ void ServerMainWindow::paintEvent(QPaintEvent* e)
 {
   //static QPixmap pixmap;
   QRect rect = e->rect();
-  if(!_image.isNull()){
+  if(!_image.isNull() && !_myImage.isNull()){
     QPainter p(this);
     p.translate(-rect.x(), -rect.y());
     p.setClipRegion(e->region());
     p.drawImage(15, 195, _image);
-    p.drawImage(315, 195, _oldImage);
+    p.drawImage(315, 195, _myImage);
     p.end();
   }
 }
@@ -453,27 +350,27 @@ void ServerMainWindow::paintEvent(QPaintEvent* e)
 void ServerMainWindow::setImage()
 {
   unsigned char *dst;
-  //unsigned char *mydst;
+  unsigned char *mydst;
   unsigned char *src;
   src =(unsigned char*)m_databuffer.data();
   dst = _image.bits();
-  
-  /* 
-  //흑백
   mydst = _myImage.bits();
-
+  
+  //흑백 변환
   for (int i = 0 ; i < IMAGEHEIGHT ; i++) {
     for (int j = 0 ; j < IMAGEWIDTH ; j++) {
-         int index = i*IMAGEWIDTH*DEPTH + j*DEPTH;
-          int mid = (dst[index] + dst[index+1] + dst[index+2]) / 3;     
-              mydst[index] = mid;
-              mydst[index+1] = mid;
-               mydst[index+2] = mid;
-     }   
-  }   
-*/
-         
-  
+      int index = i*IMAGEWIDTH*DEPTH + j*DEPTH;
+      int mid = (dst[index] + dst[index+1] + dst[index+2]) / 3; 
+      
+      //qDebug("mid : %d \r\n", mid);
+      mydst[index] = mid;
+      mydst[index+1] = mid; 
+      mydst[index+2] = mid; 
+    }
+  }
+
+
+
   int index;
   for(int i = 0 ; i < IMAGEHEIGHT ; i++){
     for(int j = 0 ; j < IMAGEWIDTH ; j++) {

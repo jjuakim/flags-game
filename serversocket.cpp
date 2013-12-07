@@ -16,7 +16,7 @@ ServerSocket::ServerSocket(int port, QObject* parent, const char* name)
 
 ServerSocket::~ServerSocket()
 {
-	delete m_socket;
+  delete m_socket;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
