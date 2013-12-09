@@ -1,7 +1,7 @@
 /****************************************************************************
 ** Form implementation generated from reading ui file 'servermainwindowbase.ui'
 **
-** Created: 토 12월 7 20:21:40 2013
+** Created: 화 12월 10 03:05:56 2013
 **      by: The User Interface Compiler ($Id: qt/main.cpp   3.3.7   edited Aug 31 2005 $)
 **
 ** WARNING! All changes made in this file will be lost!
@@ -59,8 +59,17 @@ MainWindowBase::MainWindowBase( QWidget* parent, const char* name, WFlags fl )
 
     m_gameStatus = new QLabel( this, "m_gameStatus" );
     m_gameStatus->setGeometry( QRect( 120, 161, 460, 30 ) );
+
+    m_gameScore = new QLabel( this, "m_gameScore" );
+    m_gameScore->setGeometry( QRect( 11, 460, 270, 31 ) );
+
+    m_gameResult = new QLabel( this, "m_gameResult" );
+    m_gameResult->setGeometry( QRect( 300, 410, 281, 81 ) );
+
+    m_gameLife = new QLabel( this, "m_gameLife" );
+    m_gameLife->setGeometry( QRect( 20, 420, 270, 27 ) );
     languageChange();
-    resize( QSize(610, 464).expandedTo(minimumSizeHint()) );
+    resize( QSize(610, 507).expandedTo(minimumSizeHint()) );
     clearWState( WState_Polished );
 }
 
@@ -84,5 +93,8 @@ void MainWindowBase::languageChange()
     m_stop->setText( tr( "Stop" ) );
     m_btnGame->setText( tr( "GameStart" ) );
     m_gameStatus->setText( tr( "Game Status" ) );
+    m_gameScore->setText( tr( "<p align=\"center\"><b>Score</b></p>" ) );
+    m_gameResult->setText( tr( "<h1><p align=\"center\"><b>O/X</b></p></h1>" ) );
+    m_gameLife->setText( tr( "<p align=\"center\"><b>Life</b></p>" ) );
 }
 

@@ -40,10 +40,15 @@ public:
 
   int timeCount;
   bool isGameStart;
+  int lifePoint;
+  int gameScore;
+  int stage;
+  QString command[4];
+  int DetectMotion(int sectSum[]);
+  void GameInit();
 
-private:
   QTimer *timer; 
-  QPixmap img_main, img_ori, img_lt, img_lb, img_rt, img_rb;
+  QPixmap img_gameover, img_main, img_ori, img_lt, img_lb, img_rt, img_rb;
   
 protected:
   ServerSocket* m_server;

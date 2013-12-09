@@ -1,7 +1,7 @@
 /****************************************************************************
 ** Form interface generated from reading ui file 'servermainwindowbase.ui'
 **
-** Created: 토 12월 7 20:21:35 2013
+** Created: 화 12월 10 03:05:50 2013
 **      by: The User Interface Compiler ($Id: qt/main.cpp   3.3.7   edited Aug 31 2005 $)
 **
 ** WARNING! All changes made in this file will be lost!
@@ -37,6 +37,9 @@ public:
     QTextEdit* m_edit;
     QPushButton* m_btnGame;
     QLabel* m_gameStatus;
+    QLabel* m_gameScore;
+    QLabel* m_gameResult;
+    QLabel* m_gameLife;
 
 protected:
     QHBoxLayout* layout5;

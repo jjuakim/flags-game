@@ -36,8 +36,15 @@ ServerMainWindow::ServerMainWindow(QWidget* parent, const char* name)
   recv_total_len = 0;
   recv_len = 0;
   m_flag_err = 0;
+  
   timeCount = 0;
-  isGameStart = false;
+  GameInit();
+  stage = rand() % 4;
+  command[0] = "White Flag Up";
+  command[1] = "White Flag Down";
+  command[2] = "Blue Flag Up";
+  command[3] = "Blue Flag Down";
+  
 
   m_databuffer.resize( IMAGEWIDTH*IMAGEHEIGHT*2 );
   
@@ -62,11 +69,15 @@ ServerMainWindow::ServerMainWindow(QWidget* parent, const char* name)
   _myImage = _image.copy();
   _oldImage = _image.copy();
  // _difImage = _image.copy();
+
+  
+  // game init
   m_edit->setText("Please Connect a Clinet!");
   m_btnGame->setEnabled(false);
 
   img_main.load("main.bmp");
   img_ori.load("0.bmp");
+  img_gameover.load("gameover.bmp");
   img_lt.load("lt.bmp");
   img_lb.load("lb.bmp");
   img_rt.load("rt.bmp");
@@ -158,9 +169,12 @@ void ServerMainWindow::slotNewClient(QSocket* socket)
 {
   qDebug("client connected");
   
+  timeCount = 0;
+  GameInit();
+
   m_btnGame->setEnabled(true);
   QPainter p(this);
-  p.drawPixmap(QRect(315, 195, 256, 192), img_main);
+  p.drawPixmap(QRect(315, 195, 256, 192) , img_main);
   p.end();
 
   // notify all others about the newcomer
@@ -173,6 +187,8 @@ void ServerMainWindow::slotNewClient(QSocket* socket)
   QTextStream stream(socket);
   stream << "Server: Hi\nYou are client " << endl;
   m_edit->setText("");
+
+  m_gameStatus->setText("Client is connected. Press Game Start Button");
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -200,7 +216,7 @@ void ServerMainWindow::slotTimeDone()
     }   
   } 
 
-  //구역별차이구하기 여기할차례
+  //구역별차이구하기
  int sectSum[9] = {0,0,0,0,0,0,0,0,0};
  int oldSum[9] = {0,0,0,0,0,0,0,0,0};
  int newSum[9] = {0,0,0,0,0,0,0,0,0};
@@ -253,46 +269,107 @@ void ServerMainWindow::slotTimeDone()
   //게임 부분
   QRect rect(315, 195, IMAGEWIDTH, IMAGEHEIGHT);
   QPainter p(this);
-
-  if(timeCount != 0) {
-    m_gameStatus->setText(QString::number(timeCount));
-    timeCount--;
+  
+  if(!isGameStart) {
+     if(timeCount != 0) {
+      m_gameStatus->setText("<h1>" + QString::number(timeCount) + "</h1>");
+      timeCount--;
+    }
+    else
+    {
+      m_gameStatus->setText("Start!!!!");       
+      isGameStart = true;
+      p.drawPixmap(rect, img_ori);
+      
+      lifePoint = 5;
+      gameScore = 0;
+      stage = rand() % 4;
+      
+    }
   }
-  else
-  {
-    m_gameStatus->setText("Start!!!!");       
-    isGameStart = true;
-    p.drawPixmap(rect, img_ori);
-  }
-
-  if(isGameStart) {
+  else {
     //점수 매기는 부분
-    if(sectSum[0] == 0 && sectSum[3] == 0)
-    {
-      //left top
-      m_edit->append("left top ");
-      p.drawPixmap(rect, img_lt);
+    m_gameStatus->setText("<h1><center>" + command[stage] + "</center></h1>");
+    if (stage == DetectMotion(sectSum)) {
+      gameScore += 10;
+      m_gameScore->setText("<h1><center>Score : " + QString::number(gameScore) + "</center></h1>"); 
+      m_gameResult->setText("<h1><center><font color=green>O</font></center></h1>");
+      stage = rand() % 4;
     }
-    else if(sectSum[3] == 0 && sectSum[6] == 0)
-    {
-     //left down
-     m_edit->append("left down");
-      p.drawPixmap(rect, img_lb);
+    else if (DetectMotion(sectSum) == 4 ){
     }
-    else if(sectSum[2] ==0 && sectSum[5] == 0)
-    {
-      //right top
-      m_edit->append("right top");
-      p.drawPixmap(rect, img_rt);
+    else {
+      m_gameResult->setText("<h1><center><font color=red>X</font></center></h1>");
+      if(lifePoint == 0)
+      {
+        //게임 끝
+        p.drawPixmap(rect, img_gameover);   //게임끝 이미지 띄우기
+        timer->stop();                      // 타이머 스탑
+        m_gameStatus->setText("<h1><font color=red><center>Game Over</center></font></h1>"); //게임satus창에 끝 표시
+        m_gameResult->setText("XXX");
+        // start버튼 활성화
+        m_btnGame->setEnabled(true);
+      }
+      m_gameLife->setText("<h1><center>life : " + QString::number(lifePoint) + "</center></h1>");
+      lifePoint--;
     }
-    else if (sectSum[5] == 0 && sectSum[8] == 0)
-    {
-      //right bottom
-      m_edit->append("right botton");
-      p.drawPixmap(rect, img_rb);
-    } 
   }
   p.end();
+}
+////////////////////////////////////////////////////////////////////////////////
+
+int ServerMainWindow::DetectMotion(int sectSum[])
+{
+  QRect rect(315, 195, IMAGEWIDTH, IMAGEHEIGHT);
+  QPainter p(this);
+  int result = 4; //nothing;
+
+  if(sectSum[2] == 0 && sectSum[5] == 0)
+  {
+    //left top
+    m_edit->append("left top / blue up ");
+    p.drawPixmap(rect, img_lt);
+    result = 2;
+  }
+  else if(sectSum[5] == 0 && sectSum[8] == 0)
+  {
+   //left down
+   m_edit->append("left down / blue down");
+    p.drawPixmap(rect, img_lb);
+    result = 3;
+  }
+  else if(sectSum[0] ==0 && sectSum[3] == 0)
+  {
+    //right top
+    m_edit->append("right top / white up");
+    p.drawPixmap(rect, img_rt);
+    result = 0;
+  }
+  else if (sectSum[3] == 0 && sectSum[6] == 0)
+  {
+    //right bottom
+    m_edit->append("right botton / whilte down");
+    p.drawPixmap(rect, img_rb);
+    result = 1;
+  } 
+  else {
+    p.drawPixmap(rect, img_ori);
+  }
+  p.end();
+  
+  return result;
+}
+
+void ServerMainWindow::GameInit() 
+{
+  isGameStart = false;
+  lifePoint = 5;
+  gameScore = 0;
+
+  m_gameScore->setText("<h1><center>Score : 0 </center></h1>");
+  m_gameLife->setText("<h1><center>Life : 5</center></h1>");
+  m_gameResult->setText("");
+
 }
 ////////////////////////////////////////////////////////////////////////////////
 
@@ -300,11 +377,15 @@ void ServerMainWindow::slotGameClicked()
 {
   qDebug("Button Clicked");
   m_btnGame->setEnabled(false);
+
   
-  timeCount = 10;
-  isGameStart = false;
-  m_gameStatus->setText("READY.....!!!!!!");
+  timeCount = 5;
+  GameInit();
+  QPainter p(this);    
+  p.drawPixmap(QRect(315, 195, IMAGEWIDTH, IMAGEHEIGHT), img_main); 
+  m_gameStatus->setText("<h1>READY.....!!!!!!</h1>");
   
+
   if(timer != 0) {
     qDebug("Timer is startted");
     timer->start(1000);
@@ -315,6 +396,8 @@ void ServerMainWindow::slotGameClicked()
 ////////////////////////////////////////////////////////////////////////////////
 void ServerMainWindow::slotClientDisconnected()
 {
+  GameInit();
+
   QObject* sender = const_cast<QObject*>(QObject::sender());
   QSocket* socket = static_cast<QSocket*>(sender);
 
@@ -476,7 +559,7 @@ void ServerMainWindow::paintEvent(QPaintEvent* e)
     QPainter p(this);
     p.translate(-rect.x(), -rect.y());
     p.setClipRegion(e->region());
-    p.drawImage(15, 195, _image);
+    p.drawImage(15, 195, _image.mirror(true,false));
     p.end();
   }
 
@@ -514,7 +597,7 @@ void ServerMainWindow::setImage()
      }   
   }   
 */
-         
+        
   
   int index;
   for(int i = 0 ; i < IMAGEHEIGHT ; i++){
